@@ -10,16 +10,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 
 # GPU architecture targets — compile for multiple GPUs so the binary is portable.
-# Override at configure time:  cmake .. -DCMAKE_CUDA_ARCHITECTURES=61
+# Override at configure time:  cmake .. -DCMAKE_CUDA_ARCHITECTURES=75
+# Or use -DCMAKE_CUDA_ARCHITECTURES=native to compile for your GPU only.
 #
-#   60 = Pascal  (GTX 1060/1070/1080, P100)
-#   61 = Pascal  (GTX 1050/1070 Ti/1080 Ti)
-#   70 = Volta   (V100, Titan V)
+# CUDA 13.1+ minimum supported architectures (Pascal/Volta dropped):
 #   75 = Turing  (RTX 2060–2080, T4)
 #   80 = Ampere  (A100, RTX 3090)
 #   86 = Ampere  (RTX 3060–3080)
 #   89 = Ada     (RTX 4060–4090)
-set(CMAKE_CUDA_ARCHITECTURES "60;61;70;75;80;86;89" CACHE STRING "CUDA architectures")
+#
+# NOTE: If you have an older GPU (GTX 1000-series or earlier), you need CUDA 12.x or older.
+#       Your GTX 1070 requires CUDA 12.x to compile code (compute capability 6.1 not supported in CUDA 13+).
+set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89" CACHE STRING "CUDA architectures")
 
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type")
 
@@ -54,12 +56,19 @@ file(GLOB STUDY_SOURCES studying/*.cu)
 foreach(src ${STUDY_SOURCES})
     # extract filename without extension → becomes target name
     get_filename_component(name ${src} NAME_WE)
+    
+    # Skip 06_libcupp_atomics if CUDA arch < 7.5 (CUDA 13+ requires Turing or newer)
+    if(name STREQUAL "06_libcupp_atomics" AND CMAKE_CUDA_ARCHITECTURES MATCHES "^(60|61|70)$")
+        message(STATUS "Skipping ${name}: requires CUDA arch >= 7.5")
+        continue()
+    endif()
+    
     add_executable(${name} ${src})
 endforeach()
 
-# libcu++ atomics require sm_60+; override the arch list for this target
+# libcu++ atomics require sm_75+ for CUDA 13+
 if(TARGET 06_libcupp_atomics)
     set_target_properties(06_libcupp_atomics PROPERTIES
-        CUDA_ARCHITECTURES "60;61;70;75;80;86;89"
+        CUDA_ARCHITECTURES "75;80;86;89"
     )
 endif()
